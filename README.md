@@ -1,80 +1,80 @@
 # 🔗 Sniply — URL Shortener Service
 
-Yüksək performanslı, production-ready URL qısaltma servisi. Redis cache-first strategiyası və atomik klik analitikası ilə işləyir.
+A high-performance, production-ready URL shortening service built with a Redis cache-first strategy and atomic click analytics.
 
 ## Tech Stack
 
-- **Runtime:** Node.js + TypeScript
-- **Framework:** Express.js
-- **Database:** PostgreSQL
-- **Cache:** Redis
-- **Short code:** nanoid
+* **Runtime:** Node.js + TypeScript
+* **Framework:** Express.js
+* **Database:** PostgreSQL
+* **Cache:** Redis
+* **Short code:** nanoid
 
-## Arxitektura
+## Architecture
 
-```
+```text
 Client → Express API → Redis (cache-first)
                     ↘ PostgreSQL (cache miss)
 
-Background Job (5 dəq) → Redis clicks → PostgreSQL sync
+Background Job (5 min) → Redis clicks → PostgreSQL sync
 ```
 
-## Qovluq Strukturu
+## Project Structure
 
-```
+```text
 src/
 ├── config/
 │   ├── db.ts               # PostgreSQL pool
 │   └── redis.ts            # Redis client
 ├── controllers/
-│   └── url.controller.ts   # HTTP req/res
+│   └── url.controller.ts   # HTTP req/res handling
 ├── services/
-│   └── url.service.ts      # Biznes məntiqi, cache strategiyası
+│   └── url.service.ts      # Business logic, cache strategy
 ├── repositories/
-│   └── url.repository.ts   # SQL sorğular
+│   └── url.repository.ts   # SQL queries
 ├── middlewares/
-│   └── errorHandler.ts     # Mərkəzi xəta idarəetməsi
+│   └── errorHandler.ts     # Centralized error handling
 ├── jobs/
 │   └── clickFlush.job.ts   # Redis → PostgreSQL sync
 ├── routes/
-│   └── url.routes.ts       # Route tərifləri
+│   └── url.routes.ts       # Route definitions
 ├── types/
-│   └── index.ts            # TypeScript interfaceləri
+│   └── index.ts            # TypeScript interfaces
 ├── app.ts                  # Express setup
 └── server.ts               # Entry point
 ```
 
-## Başlamaq
+## Getting Started
 
-### Tələblər
+### Requirements
 
-- Node.js 20+
-- PostgreSQL 16+
-- Redis 7+
+* Node.js 20+
+* PostgreSQL 16+
+* Redis 7+
 
-### Local Dev
+### Local Development
 
 ```bash
-# 1. Asılılıqları qur
+# 1. Install dependencies
 npm install
 
-# 2. Environment faylını hazırla
+# 2. Create the environment file
 cp .env.example .env
-# .env faylını öz dəyərlərinlə doldur
+# Fill in the .env file with your own values
 
-# 3. PostgreSQL servisini başlat
+# 3. Start PostgreSQL
 # macOS:
 brew services start postgresql@16
 # Linux:
 sudo systemctl start postgresql
 
-# 4. Redis servisini başlat
+# 4. Start Redis
 # macOS:
 brew services start redis
 # Linux:
 sudo systemctl start redis
 
-# 5. Verilənlər bazasını yarat
+# 5. Create the database
 psql -U postgres
 ```
 
@@ -85,34 +85,35 @@ CREATE DATABASE sniply OWNER sniply;
 ```
 
 ```bash
-# 6. Migration-u işlət
+# 6. Run the migration
 psql -U sniply -d sniply -f migration.sql
 
-# 7. Dev server-i başlat
+# 7. Start the development server
 npm run dev
 ```
 
-### Docker ilə
+### Using Docker
 
 ```bash
-# Hamısını bir əmrlə qur və başlat
+# Build and start everything with one command
 docker compose up --build
 
-# Arxa planda
+# Run in the background
 docker compose up --build -d
 
-# Dayandır
+# Stop the services
 docker compose down
 
-# Məlumatları da sil
+# Stop the services and remove all data
 docker compose down -v
 ```
 
-## API Endpointləri
+## API Endpoints
 
-### `POST /api/shorten` — Link qısalt
+### `POST /api/shorten` — Shorten a URL
 
 **Request:**
+
 ```json
 {
   "originalUrl": "https://example.com/very/long/url"
@@ -120,6 +121,7 @@ docker compose down -v
 ```
 
 **Response `201`:**
+
 ```json
 {
   "shortCode": "xK3mP9q",
@@ -130,17 +132,18 @@ docker compose down -v
 
 ---
 
-### `GET /:shortCode` — Yönləndir
+### `GET /:shortCode` — Redirect to the original URL
 
 **Response:** `302 Found` → `originalUrl`
 
-**Xəta:** `404 Not Found` — shortCode mövcud deyilsə
+**Error:** `404 Not Found` — if the short code does not exist
 
 ---
 
-### `GET /health` — Servis statusu
+### `GET /health` — Service health status
 
 **Response `200`:**
+
 ```json
 {
   "status": "ok",
@@ -148,38 +151,38 @@ docker compose down -v
 }
 ```
 
-## Test
+## Testing
 
 ```bash
-# Link qısalt
+# Shorten a URL
 curl -X POST http://localhost:3000/api/shorten \
   -H "Content-Type: application/json" \
   -d '{"originalUrl": "https://google.com"}'
 
-# Redirect
+# Test the redirect
 curl -L http://localhost:3000/xK3mP9q
 
 # Health check
 curl http://localhost:3000/health
 ```
 
-## Cache Strategiyası
+## Cache Strategy
 
-| Əməliyyat | Redis Key | TTL |
-|---|---|---|
-| URL cache | `url:<shortCode>` | 24 saat |
-| Klik sayğacı | `clicks:<shortCode>` | — |
+| Operation     | Redis Key            | TTL      |
+| ------------- | -------------------- | -------- |
+| URL cache     | `url:<shortCode>`    | 24 hours |
+| Click counter | `clicks:<shortCode>` | —        |
 
 **Cache Hit:** Redis → `INCR clicks` → `302 redirect`
 
-**Cache Miss:** PostgreSQL → Redis repopulate → `INCR clicks` → `302 redirect`
+**Cache Miss:** PostgreSQL → repopulate Redis → `INCR clicks` → `302 redirect`
 
-**Click Flush:** Hər 5 dəqiqədən bir `clicks:*` keyləri PostgreSQL-ə yazılır (`GETDEL` ilə atomik)
+**Click Flush:** Every 5 minutes, `clicks:*` keys are synchronized to PostgreSQL using atomic `GETDEL` operations.
 
 ## Scripts
 
 ```bash
-npm run dev      # ts-node-dev ilə development server
-npm run build    # TypeScript → JavaScript (dist/)
-npm start        # Production server (dist/server.js)
+npm run dev      # Start the development server with ts-node-dev
+npm run build    # Compile TypeScript → JavaScript (dist/)
+npm start        # Start the production server (dist/server.js)
 ```
