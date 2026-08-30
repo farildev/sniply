@@ -1,0 +1,60 @@
+services:
+  app:
+    build: .
+    container_name: sniply_app
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      BASE_URL: http://localhost:3000
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DATABASE: sniply
+      PG_USER: sniply
+      PG_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sniply_postgres
+    environment:
+      POSTGRES_DB: sniply
+      POSTGRES_USER: sniply
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migration.sql:/docker-entrypoint-initdb.d/migration.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sniply -d sniply"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sniply_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
