@@ -10,3 +10,9 @@ export interface Url {
 export interface CreateUrlDto {
   originalUrl: string;
 }
+
+export interface ShortenResponse {
+  shortCode: string;
+  shortUrl: string;
+  originalUrl: string;
+}
